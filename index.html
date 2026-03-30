@@ -2,116 +2,606 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>K-S Allies Tag Checker</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<title>JavaScript Patch Runner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{
-    background:#000;
-    color:#00ff00;
-    font-family:Consolas,monospace;
-    display:flex;
-    justify-content:center;
-    padding:30px;
-}
-.box{
-    width:420px;
-    border:2px solid #00ff00;
-    padding:20px;
-    box-shadow:0 0 20px #00ff00;
-}
-h1{text-align:center;margin-bottom:15px;}
-input,button{
-    width:100%;
-    padding:10px;
-    margin-top:8px;
-    background:#000;
-    color:#00ff00;
-    border:1px solid #00ff00;
-}
-button{
-    background:#00ff00;
-    color:#000;
-    font-weight:bold;
-    cursor:pointer;
-}
-button:hover{background:#00cc00}
-.status{
-    margin-top:12px;
-    min-height:20px;
-}
-.section{
-    margin-top:20px;
-    font-size:13px;
-}
-.email{
-    margin-top:25px;
-    text-align:center;
-}
-.email a{
-    color:#000;
-    background:#00ff00;
-    padding:10px 15px;
-    display:inline-block;
-    text-decoration:none;
-    font-weight:bold;
-}
+body{font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;padding:20px}
+.container{max-width:1050px;margin:auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+button{padding:10px 14px;border:0;border-radius:8px;font-weight:600;cursor:pointer}
+.primary{background:#0078d4;color:#fff}
+.success{background:#28a745;color:#fff}
+.ghost{background:#e9ecef}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #ccc;border-radius:10px}
+.chip{padding:8px 12px;border-radius:999px;border:1px solid #ccc;background:#fff;font-family:monospace}
+textarea{width:100%;height:150px;font-family:monospace;padding:10px;border-radius:8px;border:1px solid #ccc;background:#fafafa}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:99999}
+.modal-box{width:600px;background:#fff;border-radius:10px;padding:16px}
+.modal-box h3{margin-top:0}
+.modal-box input,.modal-box textarea{width:100%;margin-bottom:10px}
+.footer-actions{display:flex;gap:10px;margin:16px 0}
+.log{margin-top:12px;border:1px solid #ccc;border-radius:10px}
+.ok{color:#1e7e34;font-weight:bold}
+.fail{color:#b02a37;font-weight:bold}
 </style>
 </head>
-
 <body>
-<div class="box">
 
-<h1>🟢 K-S ALLIES CHECKER 🟢</h1>
+<h1 style="text-align:center">JavaScript Patch Runner</h1>
 
-<input id="tag" placeholder="Enter Tag (max 6)">
-<button onclick="checkTag()">CHECK TAG</button>
+<div class="container">
 
-<div class="status" id="status"></div>
+<input type="file" id="fileInput" accept=".js">
 
-<div class="section">
-<b>Approved Allies:</b><br>
-DRAM, K-S, KS01, ALPHA, TEAM7, HAMAA
+<h3>Hard-Coded Hacks</h3>
+<div id="chips" class="chips"></div>
+
+<div class="footer-actions">
+  <button class="success" id="addHackBtn">Add Hard-Coded Hack</button>
+  <button class="primary" id="runReplace">Run Patches</button>
+  <button class="ghost" id="downloadFile">Download Modified JS</button>
 </div>
 
-<div class="email">
-<p>Want to join K-S alliance?</p>
-<a href="mailto:hamaali005566@gmail.com?subject=K-S Join Request&body=Hello, I want to join K-S alliance. My tag is:">
-📩 SEND EMAIL REQUEST
-</a>
+<div id="log" class="log" style="display:none">
+<table width="100%">
+<thead><tr><th>#</th><th>Status</th></tr></thead>
+<tbody id="logBody"></tbody>
+</table>
 </div>
 
+<h3>Original Script</h3>
+<textarea id="originalCode" readonly></textarea>
+
+<h3>Modified Script</h3>
+<textarea id="modifiedCode"></textarea>
+
+</div>
+
+<!-- ================= MODAL ================= -->
+<div id="hackModal" class="modal" style="display:none">
+<div class="modal-box">
+<h3>Add Hard-Coded Hack</h3>
+<input id="hackId" placeholder="Hack ID (snake_case)">
+<input id="hackName" placeholder="Hack Display Name">
+<textarea id="hackSteps" placeholder='Steps JSON
+[
+  {
+    "find": "foo",
+    "replace": "bar",
+    "regex": false,
+    "flags": "g"
+  }
+]'></textarea>
+<div class="footer-actions">
+<button class="success" id="saveHack">Save & Generate Updated Tool</button>
+<button class="ghost" onclick="closeModal()">Cancel</button>
+</div>
+</div>
 </div>
 
 <script>
-/* ====== ALLIES ONLY (6 TAGS) ====== */
-const ALLIES = [
-  "DRAM",
-  "K-S",
-  "KS01",
-  "ALPHA",
-  "TEAM7",
-  "HAMAA"
-];
 
-function checkTag(){
-    const input = document.getElementById("tag");
-    const status = document.getElementById("status");
-    const tag = input.value.trim().toUpperCase();
+function simpleObfuscate(code){
+  const b64 = btoa(unescape(encodeURIComponent(code)));
 
-    // allow A-Z, 0-9, and -
-    if(!/^[A-Z0-9-]{1,6}$/.test(tag)){
-        status.textContent = "❌ Invalid tag (max 6, letters/numbers/-)";
-        return;
-    }
+  return `
+(function(){
+  function __ngh_run(){
+    try{
+      eval(decodeURIComponent(escape(atob("${b64}"))))
+    }catch(e){}
+  }
 
-    if(ALLIES.includes(tag)){
-        status.textContent = "🟢 ALLY CONFIRMED";
-    }else{
-        status.textContent = "⚪ NOT IN ALLIES LIST";
-    }
+  if (document.readyState === "complete") {
+    setTimeout(__ngh_run, 0);
+  } else {
+    window.addEventListener("load", __ngh_run, { once:true });
+  }
+})();
+`;
 }
-</script>
 
+// === HARD_CODED_HACKS_START ===
+
+// NOTE: IF CODE IS GIVING YOU ISSUES, IT MAY BE STRING RELATED. Issue: quote / string escaping issue / May need to wrap it in a template literal
+const HARD_CODED_HACKS = [
+
+{
+  id:"gold_hack",
+  nickname:"Gold Hack",
+  enabled:true,
+  steps:[{
+    find:"ensureInt(a.credits));null!=",
+    replace:"ensureInt((a.credits==0?1:a.credits)));null!=",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"repair_building_fast",
+  nickname:"Repair Building Fast",
+  enabled:true,
+  steps:[{
+    find:"get_repairTime:function(){return this._repairTime}",
+    replace:"get_repairTime:function(){return this._repairTime=1}",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"unit_upgrade_while_building_upgrading",
+  nickname:"Enable Unit Upgrades When Building Upgrading",
+  enabled:true,
+  steps:[{
+    find:";else 0<this.RemainingDozerTime()?",
+    replace:";else 0>this.RemainingDozerTime()?",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"enable_resources_button",
+  nickname:"Enable Resources Button",
+  enabled:true,
+  steps:[{
+    find:"resourcesButton.set_Enabled(!1)",
+    replace:"resourcesButton.set_Enabled(!0)",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"move_building_while_it's_upgrading",
+  nickname:"Move Buildings while upgrading",
+  enabled:true,
+  steps:[{
+    find:"get_canMove:function(){return",
+    replace:"get_canMove:function(){return!0;",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"sector_breach_hack_1",
+  nickname:"Sector Breach Hack 1",
+  enabled:true,
+  steps:[{
+    find:"isInBattle:function(){",
+    replace:"isInBattle:function(){return!1;",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"sector_breach_hack_2",
+  nickname:"Sector Breach Hack 2",
+  enabled:true,
+  steps:[{
+    find:"0==this\\._platoon\\.get_properties\\(\\)\\.get_canDamagedUnitsExit\\(\\)\\s*&&this\\._platoon\\.hasDamagedUnits\\(\\)\\s*&&!\\w+\\.get_AllowDamagedPlatoonManagement\\(\\)\\s*\\?\\w+\\.DisplayMessage\\(\\w+\\.getString\\(\"widget_title__repair_units_before_disband\"\\),\\w+\\.getString\\(\"widget_body__repair_units_before_disband\"\\)\\):",
+    replace:"",
+    regex:true,flags:"g"
+  }]
+},
+{
+  id:"sector_breach_hack_3",
+  nickname:"Sector Breach Hack 3",
+  enabled:true,
+  steps:[{
+    find:".standGround();",
+    replace:".standGround();break;case 89:if(!event.repeat){{PS}}.Show(new {{PM}}());event.preventDefault();break;",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"sector_breach_hack_4",
+  nickname:"Sector Breach Hack 4",
+  enabled:true,
+  steps:[{
+    find:"get_isAdmin=function(){return ",
+    replace:"get_isAdmin=function(){return true;",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id:"drone_hack_1",
+  nickname:"Control Drones",
+  enabled:true,
+  steps:[{
+    find:"1==this._temporary",
+    replace:"0",
+    regex:false,flags:"g"
+  }]
+},
+{
+  id: "ngh_upgrader",
+  nickname: "NGH Instant Building Upgrader",
+  enabled: true,
+  steps: [{
+    find: "{{BASE}}.wipeBase",
+    /*transform: "obfuscate",*/
+    replace:
+`window.NGH_InitUpgraderSystem=function(){if(!window.NGH_GAME_BRIDGE){window.NGH_GAME_BRIDGE=(function(){function findBuildingsByType(type){const result=[];const list={{BASE}}._buildingsAll;if(list.iterator){const it=list.iterator();while(it.hasNext()){const b=it.next();if(b&&b.get_type&&b.get_type()===type){result.push(b)}}}else if(list.h){for(const k in list.h){const b=list.h[k];if(b&&b.get_type&&b.get_type()===type){result.push(b)}}}return result}function instantUpgrade(building){try{return {{STORE}}.Purchase({{STORE_ITEM}}.CreateUpgradeBuildingInstant(building),null)}catch(e){return!1}}function getLevel(building){try{return building.get_level()}catch(e){return-1}}function isBusy(building){try{return building.isUpgrading()||building.isConstructing()}catch(e){return!1}}return{findBuildingsByType,instantUpgrade,getLevel,isBusy}})()}if(!window.NGH__UPGRADER_KEYBOUND){window.NGH__UPGRADER_KEYBOUND=!0;function loadUpgrader(cb){if(window.NGH_API&&NGH_API.AutoUpgrade){cb&&cb();return}var xhr=new XMLHttpRequest();xhr.open("GET","https://nghrelease.pages.dev/NGH_Upgrader.js",!0);xhr.onreadystatechange=function(){if(xhr.readyState!==4)return;if(xhr.status===200||xhr.status===0){try{(0,eval)(xhr.responseText);cb&&cb()}catch(e){}}};xhr.send(null)}document.addEventListener("keydown",function(e){if(e.altKey&&!e.repeat&&e.keyCode===55){e.preventDefault();loadUpgrader(function(){NGH_API.AutoUpgrade.toggle()})}})}};{{BASE}}.wipeBase`,
+    regex: false,
+    flags: "g"
+  }]
+},
+
+
+{
+  id:"ngh_viewer_1",
+  nickname:"NGH Relocation Viewer 1",
+  enabled:true,
+  steps:[{
+    find:"var $jscomp=$jscomp||{};",
+    replace:`(function(){var ORIGINAL_PARSE=JSON.parse;if(!window.__NGH_RELOC_PARSE_HOOKED){window.__NGH_RELOC_PARSE_HOOKED=!0;JSON.parse=function(text){var obj=ORIGINAL_PARSE(text);try{if(!window.NGH_RELOCATION_FLAGS){window.NGH_RELOCATION_FLAGS={}}if(obj&&obj.flags){if("newuser_relocation_required_age_sec"in obj.flags){window.NGH_RELOCATION_FLAGS.requiredAgeSec=obj.flags.newuser_relocation_required_age_sec}if("newuser_relocation_required_playtime_sec"in obj.flags){window.NGH_RELOCATION_FLAGS.requiredPlaytimeSec=obj.flags.newuser_relocation_required_playtime_sec}}if(obj&&typeof obj.body==="string"){var body;try{body=ORIGINAL_PARSE(obj.body)}catch(e){body=null}if(body){if(typeof body.baseage==="number"){window.NGH_RELOCATION_FLAGS.currentBaseAgeSec=body.baseage}if(typeof body.timeplayed==="number"){window.NGH_RELOCATION_FLAGS.currentPlaytimeSec=body.timeplayed}}}}catch(e){console.log("[NGH][Relocation] reader error",e)}return obj}}window.NGH_RELOCATION_FLAGS=window.NGH_RELOCATION_FLAGS||{requiredAgeSec:null,requiredPlaytimeSec:null,currentBaseAgeSec:null,currentPlaytimeSec:null};console.log("[NGH] Relocation data reader active")})();var $jscomp=$jscomp||{};`,
+    regex:false,flags:"g"
+  }]
+},
+/*{
+  id:"ngh_viewer_2",
+  nickname:"NGH Relocation Viewer 2",
+  enabled:true,
+  steps:[{
+    find:"get_isAdmin=function(){return ",
+    replace:"get_isAdmin=function(){return true;",
+    regex:false,flags:"g"
+  }]
+},*/
+{
+  id:"ngh_viewer_3",
+  nickname:"NGH Relocation Viewer 3",
+  enabled:true,
+  steps:[{
+    find:"{{FLAGS}}\\.requestFlags=function\\(a,b\\)\\{[\\s\\S]*?{{XS}}\\.simplePHPRequest\\({{GLOBAL}}\\._apiURL\\+\"wc/getflags\",\\[\\],{{FLAGS}}\\.handleGetFlagsSuccess,{{FLAGS}}\\.handleGetFlagsFail,3,3E4\\)\\}\\;",
+    replace:"{{FLAGS}}.requestFlags=function(a,b){{{FLAGS}}._requestingFlags=!0;{{FLAGS}}._callback=a;{{FLAGS}}._cbData=b;{{FLAGS}}._lastGetFlags={{GLOBAL}}.getServerTimestampSeconds();{{IC}}.simplePHPRequest({{GLOBAL}}._apiURL+\"player/getinfo\",[[\"version\",{{GLOBAL}}._version]],function(c){{{FLAGS}}._lastGetInfo=c;{{XS}}.simplePHPRequest({{GLOBAL}}._apiURL+\"wc/getflags\",[],{{FLAGS}}.handleGetFlagsSuccess,{{FLAGS}}.handleGetFlagsFail,3,3E4)},function(){{{XS}}.simplePHPRequest({{GLOBAL}}._apiURL+\"wc/getflags\",[],{{FLAGS}}.handleGetFlagsSuccess,{{FLAGS}}.handleGetFlagsFail,3,3E4)})};",
+    regex:true,
+    flags:"g"
+  }]
+},
+
+/*{
+  id: "event_hack_lock_removal",
+  nickname: "Event Hack – Remove Lock & SKU Checks",
+  enabled: true,
+  steps: [
+
+    // 1) hideFromStore
+    {
+      find: "(d=c.get_hideFromStore())||",
+      replace: "",
+      regex: false,
+      flags: "g"
+    },
+
+    // 2) locked buildings / locked units (itemType + lockType)
+    {
+      find: "(d=(10==c.get_itemType()||8==c.get_itemType())&&0!=c.get_lockType())",
+      replace: "",
+      regex: false,
+      flags: "g"
+    },
+
+    // 3) lock SKU ownership (get_lockSkus)
+    {
+      find: "c=a.get_lockSkus();for(b={{Q}}.kvIterator(c.h);b.hasNext();)if(g=b.next(),c=g.key,g=g.value,{{FB}}.get_instance().getItemBalanceWithSku(c)>=g){d=!0;break}if(d)return d;",
+      replace: "",
+      regex: false,
+      flags: "g"
+    }
+  ]
+}*/
+
+];
+// === HARD_CODED_HACKS_END ===
+
+// =====================================================
+const fileInput=document.getElementById("fileInput");
+const originalCode=document.getElementById("originalCode");
+const modifiedCode=document.getElementById("modifiedCode");
+const chips=document.getElementById("chips");
+const log=document.getElementById("log");
+const logBody=document.getElementById("logBody");
+
+fileInput.onchange=e=>{
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=ev=>originalCode.value=modifiedCode.value=ev.target.result;
+ r.readAsText(f);
+};
+
+function scanVars(t){
+  const id='[A-Za-z_$][\\w$]*';
+
+  return{
+    RM:(t.match(new RegExp(`ResourceManager"\\]\\s*=\\s*(${id})`))||[])[1]||"pa",
+    SM:(t.match(new RegExp(`SaveManager"\\]\\s*=\\s*(${id})`))||[])[1]||"Ja",
+    PS:(t.match(new RegExp(`com\\.cc\\.popups\\.PopupSystem"\\]\\s*=\\s*(${id})`))||[])[1]||"U",
+    PM:(t.match(new RegExp(`(${id})\\s*=\\s*function\\(\\)\\{this\\._isShowingGoldRepairSale=!1`))||[])[1]||"pm",
+    FB:(t.match(/var\s+([A-Za-z_$][\w$]*)\s*=\s*function\s*\(\)\s*\{\s*this\._receivedPvPPayoutThisSession\s*=\s*!1\s*\}/)||[])[1],
+    Q:(t.match(/var\s+([A-Za-z_$][\w$]*)\s*=\s*function\s*\(\)\s*\{\s*this\.h\s*=\s*Object\.create\(null\)\s*\}/)||[])[1],
+    FLAGS:(t.match(/l\["com\.cc\.models\.Flags"\]\s*=\s*([A-Za-z_$][\w$]*)/)||[])[1],
+    IC:(t.match(new RegExp(`(${id})\\.__name__\\s*=\\s*"URLLoaderApi"`))||[])[1],
+    XS:(t.match(new RegExp(`(${id})\\.__name__\\s*=\\s*"MultipleAttemptURLLoader"`))||[])[1],
+    GLOBAL:(t.match(new RegExp(`(${id})\\.__name__\\s*=\\s*"GLOBAL"`))||[])[1],
+    BASE:(t.match(/([A-Za-z_$][\w$]*)\.__name__\s*=\s*"BASE"/)||[])[1],
+    STORE:(t.match(/([A-Za-z_$][\w$]*)\.__name__\s*=\s*"STORE"/)||[])[1],
+    STORE_ITEM:(t.match(/([A-Za-z_$][\w$]*)\.__name__\s*=\s*"StoreItem"/)||[])[1]
+  };
+}
+
+
+const fill = (s, v) =>s.replace(/\{\{RM\}\}/g, v.RM).replace(/\{\{SM\}\}/g, v.SM).replace(/\{\{PS\}\}/g, v.PS).replace(/\{\{PM\}\}/g, v.PM).replace(/\{\{FB\}\}/g, v.FB).replace(/\{\{Q\}\}/g, v.Q).replace(/\{\{FLAGS\}\}/g, v.FLAGS).replace(/\{\{IC\}\}/g, v.IC).replace(/\{\{XS\}\}/g, v.XS).replace(/\{\{GLOBAL\}\}/g, v.GLOBAL).replace(/\{\{BASE\}\}/g, v.BASE).replace(/\{\{STORE\}\}/g, v.STORE).replace(/\{\{STORE_ITEM\}\}/g, v.STORE_ITEM);
+
+
+
+
+function runHack(t, h, v) {
+  let ok = true;
+
+  for (let i = 0; i < h.steps.length; i++) {
+    const s = h.steps[i];
+
+    try {
+      /* =========================================
+         1) Resolve placeholders
+         ========================================= */
+      const findRaw = s.find ?? "";
+      const replRaw = s.replace ?? "";
+
+      const find = fill(findRaw, v);
+      const repl = fill(replRaw, v);
+
+      /* =========================================
+         2) Guard unresolved placeholders
+         ========================================= */
+      const unresolved = find.match(/\{\{[^}]+\}\}/g);
+      if (unresolved && unresolved.length) {
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] unresolved placeholders`,
+          unresolved
+        );
+        ok = false;
+        continue;
+      }
+
+      /* =========================================
+         3) Compile matcher
+         ========================================= */
+      let rx;
+      if (s.regex) {
+        rx = new RegExp(find, s.flags || "g");
+      } else {
+        const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        rx = new RegExp(escaped, "g");
+      }
+
+      if (!rx.test(t)) {
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] no match found`
+        );
+        ok = false;
+        continue;
+      }
+
+      /* =========================================
+         4) Transforming replace (OBFUSCATE)
+         ========================================= */
+      let finalReplace = repl;
+
+      if (s.transform === "obfuscate") {
+        const anchor = find;
+
+        // Extract payload (everything BEFORE anchor)
+        if (!repl.endsWith(anchor)) {
+          console.error(
+            `[NGH][${h.id}] obfuscate requires anchor at end of replace`
+          );
+          ok = false;
+          continue;
+        }
+
+        const payload = repl.slice(0, repl.length - anchor.length);
+
+        // Preview / confirmation popup
+        const proceed = confirm(
+          `[NGH] Obfuscate injected payload?\n\n` +
+          `Hack: ${h.nickname}\n` +
+          `Payload size: ${payload.length} chars`
+        );
+
+        if (!proceed) {
+          ok = false;
+          continue;
+        }
+
+        const obfuscated = simpleObfuscate(payload);
+
+        // Reattach anchor UNOBFUSCATED
+        finalReplace = obfuscated + anchor;
+      }
+
+      /* =========================================
+         5) Apply replace
+         ========================================= */
+      const before = t;
+      t = t.replace(rx, finalReplace);
+
+      if (t === before) {
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] replace produced no change`
+        );
+        ok = false;
+        continue;
+      }
+
+    } catch (e) {
+      console.error(
+        `[NGH][${h.id}][step ${i + 1}] exception`,
+        e
+      );
+      ok = false;
+    }
+  }
+
+  return { text: t, ok };
+}
+
+
+
+/*function runHack(t,h,v){
+ let ok=true;
+ for(const s of h.steps){
+  try{
+   const rx=s.regex?new RegExp(s.find,s.flags||"g"):new RegExp(s.find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),"g");
+   if(!rx.test(t)){ok=false;continue}
+   t=t.replace(rx,fill(s.replace,v));
+  }catch{ok=false}
+ }
+ return{text:t,ok};
+}*/
+
+
+/*function runHack(t, h, v) {
+  let ok = true;
+
+  for (let i = 0; i < h.steps.length; i++) {
+    const s = h.steps[i];
+
+    try {
+      // Resolve placeholders in FIND and REPLACE
+      const findRaw = s.find ?? "";
+      const replRaw = s.replace ?? "";
+      const find = fill(findRaw, v);
+      const repl = fill(replRaw, v);
+
+      // 1) Detect unresolved placeholders early
+      const unresolved = find.match(/\{\{[^}]+\}\}/g);
+      if (unresolved && unresolved.length) {
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] FAIL: unresolved placeholders in FIND:`,
+          unresolved,
+          "\nResolved FIND:", find
+        );
+        ok = false;
+        continue;
+      }
+
+      // 2) Compile regex (or literal) safely
+      let rx;
+      if (s.regex) {
+        rx = new RegExp(find, s.flags || "g");
+      } else {
+        const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        rx = new RegExp(escaped, "g");
+      }
+
+      // 3) Check match (and show a helpful preview)
+      if (!rx.test(t)) {
+        const preview = find.length > 140 ? find.slice(0, 140) + "..." : find;
+
+        // Helpful: if you were expecting Q/FB, show what they are
+        const varHint = [];
+        if (findRaw.includes("{{Q}}")) varHint.push(`Q=${String(v.Q)}`);
+        if (findRaw.includes("{{FB}}")) varHint.push(`FB=${String(v.FB)}`);
+        if (findRaw.includes("{{PS}}")) varHint.push(`PS=${String(v.PS)}`);
+        if (findRaw.includes("{{PM}}")) varHint.push(`PM=${String(v.PM)}`);
+
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] FAIL: no match in file.` +
+          (varHint.length ? ` (${varHint.join(", ")})` : ""),
+          "\nPreview FIND:", preview,
+          "\nregex:", !!s.regex,
+          "flags:", (s.flags || "g")
+        );
+
+        ok = false;
+        continue;
+      }
+
+      // 4) Replace and verify something changed
+      const before = t;
+      t = t.replace(rx, repl);
+
+      if (t === before) {
+        // Very rare, but can happen with odd regex + replacement
+        console.warn(
+          `[NGH][${h.id}][step ${i + 1}] FAIL: matched but produced no change.`,
+          "\nResolved FIND:", find
+        );
+        ok = false;
+        continue;
+      }
+
+      // Success (optional log; comment out if you only want failures)
+      // console.log(`[NGH][${h.id}][step ${i + 1}] OK`);
+
+    } catch (e) {
+      console.error(
+        `[NGH][${h.id}][step ${i + 1}] ERROR: exception while compiling/running step.`,
+        "\nOriginal FIND:", s.find,
+        "\nResolved FIND:", (() => { try { return fill(s.find ?? "", v); } catch { return "<fill failed>"; } })(),
+        "\nError:", e
+      );
+      ok = false;
+    }
+  }
+
+  return { text: t, ok };
+}*/
+
+
+
+
+document.getElementById("runReplace").onclick=()=>{
+ let t=originalCode.value,v=scanVars(t);
+ logBody.innerHTML="";
+ HARD_CODED_HACKS.forEach((h,i)=>{
+  if(!h.enabled)return;
+  const r=runHack(t,h,v);
+  t=r.text;
+  logBody.innerHTML+=`<tr><td>${i+1}</td><td>${h.nickname} — <span class="${r.ok?"ok":"fail"}">${r.ok?"Applied":"Failed"}</span></td></tr>`;
+ });
+ modifiedCode.value=t;
+ log.style.display="block";
+};
+
+document.getElementById("downloadFile").onclick=()=>{
+ const b=new Blob([modifiedCode.value],{type:"application/javascript"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(b);a.download="WarCommander_1.js";a.click();
+};
+
+// ================= SELF REWRITE =================
+const modal=document.getElementById("hackModal");
+document.getElementById("addHackBtn").onclick=()=>modal.style.display="flex";
+function closeModal(){modal.style.display="none"}
+
+document.getElementById("saveHack").onclick=()=>{
+ try{
+  const id=document.getElementById("hackId").value.trim();
+  const name=document.getElementById("hackName").value.trim();
+  if(!id||!name)throw"Missing fields";
+  if(HARD_CODED_HACKS.some(h=>h.id===id))throw"ID already exists";
+  const steps=JSON.parse(document.getElementById("hackSteps").value);
+  const newHack={id,nickname:name,enabled:true,steps};
+
+  const src=originalCode.value||document.documentElement.outerHTML;
+  const updated=[...HARD_CODED_HACKS,newHack];
+  const injected=`// === HARD_CODED_HACKS_START ===
+const HARD_CODED_HACKS = ${JSON.stringify(updated,null,2)};
+ // === HARD_CODED_HACKS_END ===`;
+
+  const out=src.replace(/\/\/ === HARD_CODED_HACKS_START ===[\s\S]*?\/\/ === HARD_CODED_HACKS_END ===/,injected);
+
+  const b=new Blob([out],{type:"text/html"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b);
+  a.download="js_find_replace_final_v6.html";
+  a.click();
+  closeModal();
+ }catch(e){alert("Invalid Hack:\n"+e)}
+};
+
+// Render chips
+HARD_CODED_HACKS.forEach(h=>{
+ const d=document.createElement("div");
+ d.className="chip";
+ d.textContent=h.nickname;
+ chips.appendChild(d);
+});
+</script>
 </body>
 </html>
